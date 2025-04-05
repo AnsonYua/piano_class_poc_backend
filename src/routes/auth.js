@@ -14,22 +14,51 @@ const generateOTP = () => {
 // Signup
 router.post('/signup', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { password, contactNumber, name, student } = req.body;
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
+    // Validate required fields
+    if (!contactNumber || !password || !name) {
+      return res.status(400).json({ message: 'Contact number, password, and name are required' });
+    }
+
+    // Validate student array
+    if (!Array.isArray(student) || student.length < 1 || student.length > 10) {
+      return res.status(400).json({ 
+        message: 'Student array must contain 1-10 objects' 
+      });
+    }
+
+    // Validate each student object
+    for (const studentObj of student) {
+      if (!studentObj.name || !studentObj.age) {
+        return res.status(400).json({ 
+          message: 'Each student must have a name and age' 
+        });
+      }
+      // Optional: Add age validation
+      if (isNaN(studentObj.age) || studentObj.age < 0) {
+        return res.status(400).json({ 
+          message: 'Student age must be a valid positive number' 
+        });
+      }
+    }
+
+    // Check if user already exists (using contactNumber as unique key)
+    const existingUser = await User.findOne({ contactNumber });
     if (existingUser) {
-      return res.status(400).json({ message: 'User already exists' });
+      return res.status(400).json({ message: 'User with this contact number already exists' });
     }
 
     // Generate OTP
     const otp = generateOTP();
     const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    // Create new user
+    // Create new user with additional fields
     const user = new User({
-      email,
       password,
+      contactNumber,
+      name,
+      student,
       otp: {
         code: otp,
         expiresAt: otpExpiry
@@ -38,10 +67,11 @@ router.post('/signup', async (req, res) => {
 
     await user.save();
 
-    // Send OTP email
-    await sendOTPEmail(email, otp);
+    // Send OTP to contactNumber (assuming this is a phone number)
+    // You might need to modify your emailService to handle SMS instead
+    await sendOTPEmail(contactNumber, otp); // Update this to appropriate SMS service
 
-    res.status(201).json({ message: 'User created successfully. Please verify your email.' });
+    res.status(201).json({ message: 'User created successfully. Please verify your contact number.' });
   } catch (error) {
     res.status(500).json({ message: 'Error creating user', error: error.message });
   }
@@ -50,30 +80,42 @@ router.post('/signup', async (req, res) => {
 // Verify OTP
 router.post('/verify-otp', async (req, res) => {
   try {
-    const { email, otp } = req.body;
+    const { contactNumber, otp } = req.body;
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ contactNumber });
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
     if (user.isVerified) {
-      return res.status(400).json({ message: 'Email already verified' });
+      return res.status(400).json({ message: 'Contact number already verified' });
     }
 
     if (!user.otp || user.otp.code !== otp) {
-      return res.status(400).json({ message: 'Invalid OTP' });
+      user.verifyOtpCount += 1;
+      await user.save();
+      return res.status(400).json({ 
+        message: 'Invalid OTP',
+        verifyOtpCount: user.verifyOtpCount 
+      });
     }
 
     if (new Date() > user.otp.expiresAt) {
-      return res.status(400).json({ message: 'OTP has expired' });
+      user.verifyOtpCount += 1;
+      await user.save();
+      return res.status(400).json({ 
+        message: 'OTP has expired',
+        verifyOtpCount: user.verifyOtpCount 
+      });
     }
 
     user.isVerified = true;
     user.otp = undefined;
+    // Reset verifyOtpCount on successful verification (optional)
+    user.verifyOtpCount = 0;
     await user.save();
 
-    res.json({ message: 'Email verified successfully' });
+    res.json({ message: 'Contact number verified successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Error verifying OTP', error: error.message });
   }
@@ -82,27 +124,38 @@ router.post('/verify-otp', async (req, res) => {
 // Login
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { contactNumber, password } = req.body;
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ contactNumber });
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      user.loginFailCount += 1;
+      await user.save();
+      return res.status(401).json({ 
+        message: 'Invalid credentials',
+        loginFailCount: user.loginFailCount 
+      });
     }
 
     if (!user.isVerified) {
-      return res.status(401).json({ message: 'Please verify your email first' });
+      return res.status(401).json({ message: 'Please verify your contact number first' });
+    }
+
+    // Reset loginFailCount on successful login (optional)
+    if (user.loginFailCount > 0) {
+      user.loginFailCount = 0;
+      await user.save();
     }
 
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
       expiresIn: '7d'
     });
 
-    res.json({ token, user: { id: user._id, email: user.email } });
+    res.json({ token, user: { id: user._id, contactNumber: user.contactNumber } });
   } catch (error) {
     res.status(500).json({ message: 'Error logging in', error: error.message });
   }

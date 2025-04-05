@@ -1,18 +1,30 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 
 const userSchema = new mongoose.Schema({
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    trim: true,
-    lowercase: true
-  },
   password: {
     type: String,
     required: true
   },
+  contactNumber: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  name: {
+    type: String,
+    required: true
+  },
+  student: [{
+    name: {
+      type: String,
+      required: true
+    },
+    age: {
+      type: Number,
+      required: true
+    }
+  }],
   isVerified: {
     type: Boolean,
     default: false
@@ -20,9 +32,19 @@ const userSchema = new mongoose.Schema({
   otp: {
     code: String,
     expiresAt: Date
+  },
+  loginFailCount: {
+    type: Number,
+    default: 0
+  },
+  verifyOtpCount: {
+    type: Number,
+    default: 0
+  },
+  resetFailCount: {
+    type: Number,
+    default: 0
   }
-}, {
-  timestamps: true
 });
 
 // Hash password before saving
@@ -38,11 +60,9 @@ userSchema.pre('save', async function(next) {
   }
 });
 
-// Method to compare password
+// Method to compare passwords
 userSchema.methods.comparePassword = async function(candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
+  return await bcrypt.compare(candidatePassword, this.password);
 };
 
-const User = mongoose.model('User', userSchema);
-
-module.exports = User; 
+module.exports = mongoose.model('User', userSchema);
