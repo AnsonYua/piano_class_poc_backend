@@ -6,6 +6,11 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  role: {
+    type: String,
+    enum: ['teacher', 'student', 'piano_admin'],
+    required: true
+  },
   contactNumber: {
     type: String,
     required: true,
@@ -31,7 +36,8 @@ const userSchema = new mongoose.Schema({
   },
   otp: {
     code: String,
-    expiresAt: Date
+    expiresAt: Date,
+    generatedAt: Date // New field to track when the OTP was generated
   },
   loginFailCount: {
     type: Number,

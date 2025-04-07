@@ -35,5 +35,41 @@ module.exports = {
     TOO_MANY_ATTEMPTS: {
         code: 'TOO_MANY_ATTEMPTS',
         message: 'Too many signup attempts. Please try again later.'
+    },
+    USER_NOT_FOUND: {
+        code: 'USER_NOT_FOUND',
+        message: 'User not found'
+    },
+    ALREADY_VERIFIED: {
+        code: 'ALREADY_VERIFIED',
+        message: 'Contact number already verified'
+    },
+    INVALID_OTP: {
+        code: 'INVALID_OTP',
+        message: 'Invalid OTP'
+    },
+    OTP_EXPIRED: {
+        code: 'OTP_EXPIRED',
+        message: 'OTP has expired'
+    },
+    TOO_MANY_OTP_ATTEMPTS: {
+        code: 'TOO_MANY_OTP_ATTEMPTS',
+        message: 'Too many OTP verification attempts. Please try again later.'
+    },
+    TOO_MANY_RESET_ATTEMPTS: {
+        code: 'TOO_MANY_RESET_ATTEMPTS',
+        message: 'Too many password reset attempts. Please try again later.'
+    },
+    UNVERIFIED_USER: {
+        code: 'UNVERIFIED_USER',
+        message: 'Please verify your contact number first'
+    },
+    INVALID_ROLE: {
+        code: 'INVALID_ROLE',
+        message: 'Invalid role'
+    },
+    OTP_TOO_RECENT: {
+        code: 'OTP_TOO_RECENT',
+        message: 'Please wait before requesting a new OTP'
     }
-  };
+};

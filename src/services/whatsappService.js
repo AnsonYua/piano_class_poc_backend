@@ -19,7 +19,7 @@ const sendOTPWhatsApp = async (contactNumber, otp) => {
       body: `Your verification OTP is: ${otp}. It expires in 10 minutes.`
     });
 
-    console.log(`OTP sent to ${contactNumber}: ${message.sid}`);
+    console.log(`OTP sent to ${contactNumber}: ${message.sid} ${otp}`);
   } catch (error) {
     throw new Error(`Failed to send OTP via WhatsApp: ${error.message}`);
   }
