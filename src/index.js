@@ -17,7 +17,13 @@ mongoose.connect(process.env.MONGODB_URI, {
     version: '1',
     strict: true,
     deprecationErrors: true,
-  }
+  },
+  connectTimeoutMS: 30000, // Increase connection timeout to 30 seconds
+  socketTimeoutMS: 45000,  // Increase socket timeout to 45 seconds
+  maxPoolSize: 50,         // Increase connection pool size
+  minPoolSize: 10,         // Set minimum connection pool size
+  retryWrites: true,       // Enable retry for write operations
+  retryReads: true         // Enable retry for read operations
 })
 .then(() => console.log('Connected to MongoDB Atlas'))
 .catch((err) => console.error('MongoDB connection error:', err));

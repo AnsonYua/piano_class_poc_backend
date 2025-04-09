@@ -229,10 +229,9 @@ async function signupUser(req, res, type) {
   }
 }
 
-// Verify OTP
-router.post('/:userType/verify-otp', async (req, res) => {
+// Common OTP verification function
+async function verifyOTP(req, res, userType) {
   try {
-    const userType = req.params.userType;
     const validation = validateUserType(userType);
     if (!validation.isValid) {
       return res.status(400).json(validation.error);
@@ -247,7 +246,7 @@ router.post('/:userType/verify-otp', async (req, res) => {
       });
     }
 
-    userId = token;
+    const userId = token;
     const user = await findUser({ _id: userId }, userType);
     if (!user) {
       return res.status(404).json({
@@ -311,6 +310,16 @@ router.post('/:userType/verify-otp', async (req, res) => {
       error: error.message
     });
   }
+}
+
+// Verify OTP for students (dedicated endpoint)
+router.post('/verify-otp', async (req, res) => {
+  await verifyOTP(req, res, 'student');
+});
+
+// Verify OTP for other user types
+router.post('/:userType/verify-otp', async (req, res) => {
+  await verifyOTP(req, res, req.params.userType);
 });
 
 // Resend OTP
@@ -395,10 +404,9 @@ router.post('/resend-otp', async (req, res) => {
   }
 });
 
-// Login
-router.post('/:userType/login', async (req, res) => {
+// Common login function
+async function handleLogin(req, res, userType) {
   try {
-    const userType = req.params.userType;
     const validation = validateUserType(userType);
     if (!validation.isValid) {
       return res.status(400).json(validation.error);
@@ -422,6 +430,14 @@ router.post('/:userType/login', async (req, res) => {
       return res.status(401).json({
         errorCode: ERROR_CODES.UNVERIFIED_USER.code,
         message: ERROR_CODES.UNVERIFIED_USER.message
+      });
+    }
+
+    // Check if account is not active
+    if (user.accountStatus !== 'active') {
+      return res.status(403).json({
+        errorCode: ERROR_CODES.ACCOUNT_NOT_ACTIVE.code,
+        message: ERROR_CODES.ACCOUNT_NOT_ACTIVE.message
       });
     }
 
@@ -461,17 +477,21 @@ router.post('/:userType/login', async (req, res) => {
       error: error.message
     });
   }
+}
+
+// Login for students (dedicated endpoint)
+router.post('/login', async (req, res) => {
+  await handleLogin(req, res, 'student');
 });
 
-// Request Password Reset
-router.post('/:userType/request-reset-password', async (req, res) => {
-  try {
-    const userType = req.params.userType;
-    const validation = validateUserType(userType);
-    if (!validation.isValid) {
-      return res.status(400).json(validation.error);
-    }
+// Login for other user types
+router.post('/:userType/login', async (req, res) => {
+  await handleLogin(req, res, req.params.userType);
+});
 
+// Common function for handling password reset requests
+async function handlePasswordResetRequest(req, res, userType) {
+  try {
     const { contactNumber } = req.body;
     const fieldValidation = validateRequiredFields(req.body, ['contactNumber']);
     if (!fieldValidation.isValid) {
@@ -490,6 +510,14 @@ router.post('/:userType/request-reset-password', async (req, res) => {
       return res.status(401).json({
         errorCode: ERROR_CODES.UNVERIFIED_USER.code,
         message: ERROR_CODES.UNVERIFIED_USER.message
+      });
+    }
+
+    // Check if account is not active
+    if (user.accountStatus !== 'active') {
+      return res.status(403).json({
+        errorCode: ERROR_CODES.ACCOUNT_NOT_ACTIVE.code,
+        message: ERROR_CODES.ACCOUNT_NOT_ACTIVE.message
       });
     }
 
@@ -553,17 +581,27 @@ router.post('/:userType/request-reset-password', async (req, res) => {
       error: error.message
     });
   }
+}
+
+// Request Password Reset for Students (dedicated endpoint)
+router.post('/request-reset-password', async (req, res) => {
+  await handlePasswordResetRequest(req, res, 'student');
+});
+
+// Request Password Reset for other user types
+router.post('/:userType/request-reset-password', async (req, res) => {
+  const userType = req.params.userType;
+  const validation = validateUserType(userType);
+  if (!validation.isValid) {
+    return res.status(400).json(validation.error);
+  }
+  
+  await handlePasswordResetRequest(req, res, userType);
 });
 
 // Reset Password
-router.post('/:userType/reset-password', async (req, res) => {
+router.post('/reset-password', async (req, res) => {
   try {
-    const userType = req.params.userType;
-    const validation = validateUserType(userType);
-    if (!validation.isValid) {
-      return res.status(400).json(validation.error);
-    }
-
     const { token, otp, newPassword } = req.body;
     const fieldValidation = validateRequiredFields(req.body, ['token', 'otp', 'newPassword']);
     if (!fieldValidation.isValid) {
@@ -573,7 +611,8 @@ router.post('/:userType/reset-password', async (req, res) => {
       });
     }
 
-    const user = await findUser({ _id: token }, userType);
+    // Find user by ID without specifying role
+    const user = await User.findById(token);
     if (!user) {
       return res.status(404).json({
         errorCode: ERROR_CODES.USER_NOT_FOUND.code,

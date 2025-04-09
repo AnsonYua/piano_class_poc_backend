@@ -87,5 +87,9 @@ module.exports = {
     TOKEN_EXPIRED: {
         code: 'TOKEN_EXPIRED',
         message: 'Token has expired'
+    },
+    ACCOUNT_NOT_ACTIVE: {
+        code: 'ACCOUNT_NOT_ACTIVE',
+        message: 'Your account is not active. Please contact support.'
     }
 };
