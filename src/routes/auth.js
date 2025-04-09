@@ -5,174 +5,256 @@ const User = require('../models/User');
 const SignupAttempt = require('../models/SignupAttempt'); 
 const auth = require('../middleware/auth');
 const { sendOTPWhatsApp } = require('../services/whatsappService');
-const ERROR_CODES = require('../routes/authError');
+const ERROR_CODES = require('./error');
 const router = express.Router();
 
 const OTP_EXPIRATION_TIME = 10 * 60 * 1000; // 10 minutes in milliseconds
+const VALID_USER_TYPES = ["student", "teacher", "shop_admin", "admin"];
 
 // Generate OTP
 const generateOTP = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-// Signup
-router.post('/signup', async (req, res) => {
-  try {
-      const { password, contactNumber, name, student } = req.body;
-      const role = 'student';
-      // Validate required fields
-      if (!contactNumber || !password || !name || !role) {
-        return res.status(400).json({
-            errorCode: ERROR_CODES.MISSING_FIELDS.code,
-            message: ERROR_CODES.MISSING_FIELDS.message
-        });
-    }
-
-      // Validate student array
-      if (!Array.isArray(student) || student.length < 1 || student.length > 10) {
-          return res.status(400).json({
-              errorCode: ERROR_CODES.INVALID_STUDENT_ARRAY.code,
-              message: ERROR_CODES.INVALID_STUDENT_ARRAY.message
-          });
+// Validate user type
+const validateUserType = (userType) => {
+  if (!VALID_USER_TYPES.includes(userType)) {
+    return {
+      isValid: false,
+      error: {
+        errorCode: ERROR_CODES.INVALID_ROLE.code,
+        message: ERROR_CODES.INVALID_ROLE.message
       }
-
-      // Validate role
-      const validRoles = ['teacher', 'student', 'piano_admin'];
-      if (!validRoles.includes(role)) {
-          return res.status(400).json({
-              errorCode:  ERROR_CODES.INVALID_ROLE.code,
-              message: ERROR_CODES.INVALID_ROLE.message
-          });
-      }
-
-      // Validate each student object
-      for (const studentObj of student) {
-          if (!studentObj.name || !studentObj.age) {
-              return res.status(400).json({
-                  errorCode: ERROR_CODES.INVALID_STUDENT_DATA.code,
-                  message: ERROR_CODES.INVALID_STUDENT_DATA.message
-              });
-          }
-          if (isNaN(studentObj.age) || studentObj.age < 0) {
-              return res.status(400).json({
-                  errorCode: ERROR_CODES.INVALID_STUDENT_AGE.code,
-                  message: ERROR_CODES.INVALID_STUDENT_AGE.message
-              });
-          }
-          if (studentObj.age <= 5) {
-              return res.status(400).json({
-                  errorCode: ERROR_CODES.STUDENT_AGE_TOO_LOW.code,
-                  message: ERROR_CODES.STUDENT_AGE_TOO_LOW.message
-              });
-          }
-      }
-
-      // Check signup attempts in the last 10 minutes
-      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-      const attempts = await SignupAttempt.countDocuments({
-          contactNumber,
-          createdAt: { $gte: tenMinutesAgo }
-      });
-
-      if (attempts >= 10) {
-          return res.status(429).json({
-              errorCode: ERROR_CODES.TOO_MANY_ATTEMPTS.code,
-              message: ERROR_CODES.TOO_MANY_ATTEMPTS.message
-          });
-      }
-
-      // Start Mongoose transaction
-      const session = await mongoose.startSession();
-      session.startTransaction();
-      try {
-          // Check if user already exists within the transaction
-          const existingUser = await User.findOne({ contactNumber }).session(session);
-          if (existingUser) {
-              if (existingUser.isVerified) {
-                  await session.abortTransaction();
-                  return res.status(400).json({
-                      errorCode: ERROR_CODES.USER_ALREADY_EXISTS.code,
-                      message: ERROR_CODES.USER_ALREADY_EXISTS.message
-                  });
-              }
-              // Delete unverified existing user
-              await User.deleteOne({ contactNumber }).session(session);
-          }
-
-          // Generate OTP
-          const otp = generateOTP();
-          const otpExpiry = new Date(Date.now() + OTP_EXPIRATION_TIME); // Use the variable
-
-          // Create new user within the transaction
-          const user = new User({
-              password,
-              contactNumber,
-              name,
-              student,
-              role,
-              otp: {
-                  code: otp,
-                  expiresAt: otpExpiry,
-                  generatedAt: new Date() 
-              }
-          });
-          await user.save({ session });
-
-          // Log the signup attempt
-          const signupAttempt = new SignupAttempt({
-              contactNumber,
-              createdAt: new Date()
-          });
-          await signupAttempt.save();
-
-          // Send OTP via WhatsApp (outside transaction as it's an external call)
-          await sendOTPWhatsApp(contactNumber, otp);
-
-          // Commit the transaction
-          await session.commitTransaction();
-          res.status(201).json({ 
-            message: 'User created successfully. Please verify your contact number.',
-            token: user._id // Return the ObjectId of the user
-          });
-        } catch (error) {
-          // Abort transaction on error
-          await session.abortTransaction();
-          throw error; // Re-throw to be caught by outer try-catch
-      } finally {
-          // End the session
-          session.endSession();
-      }
-  } catch (error) {
-      res.status(500).json({
-          errorCode: ERROR_CODES.INTERNAL_SERVER_ERROR.code,
-          message: ERROR_CODES.INTERNAL_SERVER_ERROR.message,
-          error: error.message
-      });
+    };
   }
+  return { isValid: true };
+};
+
+// Validate required fields
+const validateRequiredFields = (fields, fieldNames) => {
+  for (const field of fieldNames) {
+    if (!fields[field]) {
+      return {
+        isValid: false,
+        error: {
+          errorCode: ERROR_CODES.MISSING_FIELDS.code,
+          message: ERROR_CODES.MISSING_FIELDS.message
+        }
+      };
+    }
+  }
+  return { isValid: true };
+};
+
+// Find user by criteria
+const findUser = async (criteria, role, session = null) => {
+  if (!role) {
+    throw new Error('Role is required for user lookup');
+  }
+  const query = User.findOne({ ...criteria, role });
+  if (session) {
+    query.session(session);
+  }
+  return await query;
+};
+
+// Validate student data
+const validateStudentData = (student) => {
+  if (!Array.isArray(student) || student.length < 1 || student.length > 10) {
+    return {
+      isValid: false,
+      error: {
+        errorCode: ERROR_CODES.INVALID_STUDENT_ARRAY.code,
+        message: ERROR_CODES.INVALID_STUDENT_ARRAY.message
+      }
+    };
+  }
+
+  for (const studentObj of student) {
+    if (!studentObj.name || !studentObj.age) {
+      return {
+        isValid: false,
+        error: {
+          errorCode: ERROR_CODES.INVALID_STUDENT_DATA.code,
+          message: ERROR_CODES.INVALID_STUDENT_DATA.message
+        }
+      };
+    }
+    if (isNaN(studentObj.age) || studentObj.age < 0) {
+      return {
+        isValid: false,
+        error: {
+          errorCode: ERROR_CODES.INVALID_STUDENT_AGE.code,
+          message: ERROR_CODES.INVALID_STUDENT_AGE.message
+        }
+      };
+    }
+    if (studentObj.age <= 5) {
+      return {
+        isValid: false,
+        error: {
+          errorCode: ERROR_CODES.STUDENT_AGE_TOO_LOW.code,
+          message: ERROR_CODES.STUDENT_AGE_TOO_LOW.message
+        }
+      };
+    }
+  }
+  return { isValid: true };
+};
+
+// Handle signup route
+const handleSignup = async (req, res, userType) => {
+  const validation = validateUserType(userType);
+  if (!validation.isValid) {
+    return res.status(400).send(validation.error);
+  }
+  await signupUser(req, res, userType);
+};
+
+router.post('/signup', async (req, res) => {
+  await handleSignup(req, res, "student");
 });
 
+router.post('/:userType/signup', async (req, res) => {
+  await handleSignup(req, res, req.params.userType);
+});
 
-// Verify OTP
-router.post('/verify-otp', async (req, res) => {
+async function signupUser(req, res, type) {
   try {
-    const { token, otp } = req.body; // Change contactNumber to userId
-    userId = token;
+    const { password, contactNumber, name, student } = req.body;
+    const role = type;
+
     // Validate required fields
-    if (!userId || !otp) {
-      return res.status(400).json({
-        errorCode: ERROR_CODES.MISSING_FIELDS.code,
-        message: 'Contact number and OTP are required'
+    const fieldValidation = validateRequiredFields(req.body, ['contactNumber', 'password', 'name']);
+    if (!fieldValidation.isValid) {
+      return res.status(400).json(fieldValidation.error);
+    }
+
+    // Validate role
+    const roleValidation = validateUserType(role);
+    if (!roleValidation.isValid) {
+      return res.status(400).json(roleValidation.error);
+    }
+
+    // Validate student data if role is student
+    if (role === 'student') {
+      const studentValidation = validateStudentData(student);
+      if (!studentValidation.isValid) {
+        return res.status(400).json(studentValidation.error);
+      }
+    }
+
+    // Check signup attempts in the last 10 minutes
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    const attempts = await SignupAttempt.countDocuments({
+      contactNumber,
+      createdAt: { $gte: tenMinutesAgo }
+    });
+
+    if (attempts >= 10) {
+      return res.status(429).json({
+        errorCode: ERROR_CODES.TOO_MANY_ATTEMPTS.code,
+        message: ERROR_CODES.TOO_MANY_ATTEMPTS.message
       });
     }
 
-    const user = await User.findById(userId); // Find user by ObjectId
+    // Start Mongoose transaction
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      // Check if user already exists within the transaction
+      const existingUser = await findUser({ contactNumber }, role, session);
+      if (existingUser) {
+        if (existingUser.isVerified) {
+          await session.abortTransaction();
+          return res.status(400).json({
+            errorCode: ERROR_CODES.USER_ALREADY_EXISTS.code,
+            message: ERROR_CODES.USER_ALREADY_EXISTS.message
+          });
+        }
+        // Delete unverified existing user
+        await User.deleteOne({ contactNumber, role }).session(session);
+      }
+
+      // Generate OTP
+      const otp = generateOTP();
+      const otpExpiry = new Date(Date.now() + OTP_EXPIRATION_TIME);
+
+      // Create new user within the transaction
+      const user = new User({
+        password,
+        contactNumber,
+        name,
+        student,
+        role,
+        accountStatus: 'pending', // Set initial account status to pending for all user types
+        otp: {
+          code: otp,
+          expiresAt: otpExpiry,
+          generatedAt: new Date()
+        }
+      });
+      await user.save({ session });
+
+      // Log the signup attempt
+      const signupAttempt = new SignupAttempt({
+        contactNumber,
+        createdAt: new Date()
+      });
+      await signupAttempt.save({ session });
+
+      // Send OTP via WhatsApp (outside transaction as it's an external call)
+      await sendOTPWhatsApp(contactNumber, otp);
+
+      // Commit the transaction
+      await session.commitTransaction();
+      res.status(201).json({
+        message: 'User created successfully. Please verify your contact number.',
+        token: user._id
+      });
+    } catch (error) {
+      // Abort transaction on error
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      // End the session
+      session.endSession();
+    }
+  } catch (error) {
+    res.status(500).json({
+      errorCode: ERROR_CODES.INTERNAL_SERVER_ERROR.code,
+      message: ERROR_CODES.INTERNAL_SERVER_ERROR.message,
+      error: error.message
+    });
+  }
+}
+
+// Verify OTP
+router.post('/:userType/verify-otp', async (req, res) => {
+  try {
+    const userType = req.params.userType;
+    const validation = validateUserType(userType);
+    if (!validation.isValid) {
+      return res.status(400).json(validation.error);
+    }
+
+    const { token, otp } = req.body;
+    const fieldValidation = validateRequiredFields(req.body, ['token', 'otp']);
+    if (!fieldValidation.isValid) {
+      return res.status(400).json({
+        errorCode: ERROR_CODES.MISSING_USER_ID_OTP.code,
+        message: ERROR_CODES.MISSING_USER_ID_OTP.message
+      });
+    }
+
+    userId = token;
+    const user = await findUser({ _id: userId }, userType);
     if (!user) {
       return res.status(404).json({
         errorCode: ERROR_CODES.USER_NOT_FOUND.code,
         message: ERROR_CODES.USER_NOT_FOUND.message
       });
     }
-
 
     if (user.isVerified) {
       return res.status(400).json({
@@ -212,6 +294,13 @@ router.post('/verify-otp', async (req, res) => {
     user.isVerified = true;
     user.otp = undefined;
     user.verifyOtpCount = 0;
+    
+    // Update account status based on user type
+    if (user.role === 'student') {
+      user.accountStatus = 'active'; // Set to active for students after OTP verification
+    }
+    // For teachers and shop_admin, accountStatus remains 'pending' even after OTP verification
+    
     await user.save();
 
     res.json({ message: 'Contact number verified successfully' });
@@ -307,19 +396,21 @@ router.post('/resend-otp', async (req, res) => {
 });
 
 // Login
-router.post('/login', async (req, res) => {
+router.post('/:userType/login', async (req, res) => {
   try {
-    const { contactNumber, password } = req.body;
-
-    // Validate required fields
-    if (!contactNumber || !password) {
-      return res.status(400).json({
-        errorCode: ERROR_CODES.MISSING_FIELDS.code,
-        message:  ERROR_CODES.MISSING_FIELDS.message
-      });
+    const userType = req.params.userType;
+    const validation = validateUserType(userType);
+    if (!validation.isValid) {
+      return res.status(400).json(validation.error);
     }
 
-    const user = await User.findOne({ contactNumber });
+    const { contactNumber, password } = req.body;
+    const fieldValidation = validateRequiredFields(req.body, ['contactNumber', 'password']);
+    if (!fieldValidation.isValid) {
+      return res.status(400).json(fieldValidation.error);
+    }
+
+    const user = await findUser({ contactNumber }, userType);
     if (!user) {
       return res.status(401).json({
         errorCode: ERROR_CODES.INVALID_CREDENTIALS.code,
@@ -358,7 +449,7 @@ router.post('/login', async (req, res) => {
     res.json({
       token,
       user: {
-        id: user._id,
+        //id: user._id,
         contactNumber: user.contactNumber,
         name: user.name
       }
@@ -373,19 +464,21 @@ router.post('/login', async (req, res) => {
 });
 
 // Request Password Reset
-router.post('/request-reset-password', async (req, res) => {
+router.post('/:userType/request-reset-password', async (req, res) => {
   try {
-    const { contactNumber } = req.body;
-
-    // Validate required fields
-    if (!contactNumber) {
-      return res.status(400).json({
-        errorCode: ERROR_CODES.MISSING_FIELDS.code,
-        message:  ERROR_CODES.MISSING_FIELDS.message
-      });
+    const userType = req.params.userType;
+    const validation = validateUserType(userType);
+    if (!validation.isValid) {
+      return res.status(400).json(validation.error);
     }
 
-    const user = await User.findOne({ contactNumber });
+    const { contactNumber } = req.body;
+    const fieldValidation = validateRequiredFields(req.body, ['contactNumber']);
+    if (!fieldValidation.isValid) {
+      return res.status(400).json(fieldValidation.error);
+    }
+
+    const user = await findUser({ contactNumber }, userType);
     if (!user) {
       return res.status(404).json({
         errorCode: ERROR_CODES.USER_NOT_FOUND.code,
@@ -463,19 +556,24 @@ router.post('/request-reset-password', async (req, res) => {
 });
 
 // Reset Password
-router.post('/reset-password', async (req, res) => {
+router.post('/:userType/reset-password', async (req, res) => {
   try {
-    const { token, otp, newPassword } = req.body; // Change contactNumber to token
+    const userType = req.params.userType;
+    const validation = validateUserType(userType);
+    if (!validation.isValid) {
+      return res.status(400).json(validation.error);
+    }
 
-    // Validate required fields
-    if (!token || !otp || !newPassword) {
+    const { token, otp, newPassword } = req.body;
+    const fieldValidation = validateRequiredFields(req.body, ['token', 'otp', 'newPassword']);
+    if (!fieldValidation.isValid) {
       return res.status(400).json({
-        errorCode: ERROR_CODES.MISSING_FIELDS.code,
-        message: 'User ID, OTP, and new password are required'
+        errorCode: ERROR_CODES.MISSING_USER_ID_OTP_PASSWORD.code,
+        message: ERROR_CODES.MISSING_USER_ID_OTP_PASSWORD.message
       });
     }
 
-    const user = await User.findById(token); // Find user by ObjectId
+    const user = await findUser({ _id: token }, userType);
     if (!user) {
       return res.status(404).json({
         errorCode: ERROR_CODES.USER_NOT_FOUND.code,
@@ -540,17 +638,38 @@ router.post('/reset-password', async (req, res) => {
   }
 });
 
-// Check token
-router.get('/check-token', auth, (req, res) => {
+// Validate Token
+router.post('/validate-token', async (req, res) => {
   try {
-    res.json({
-      user: {
-        id: req.user._id,
-        contactNumber: req.user.contactNumber,
-        name: req.user.name
-      }
-    });
+    const { token } = req.body; // Extract token from request body
+
+    // Validate required fields
+    if (!token) {
+      return res.status(400).json({
+        errorCode: ERROR_CODES.MISSING_FIELDS.code,
+        message: 'Token is required'
+      });
+    }
+
+    // Verify the token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // If verification is successful, return the user ID
+    res.json({ userId: decoded.userId });
   } catch (error) {
+    // Handle token verification errors
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({
+        errorCode: ERROR_CODES.INVALID_TOKEN.code,
+        message: ERROR_CODES.INVALID_TOKEN.message
+      });
+    }
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        errorCode: ERROR_CODES.TOKEN_EXPIRED.code,
+        message: ERROR_CODES.TOKEN_EXPIRED.message
+      });
+    }
     res.status(500).json({
       errorCode: ERROR_CODES.INTERNAL_SERVER_ERROR.code,
       message: ERROR_CODES.INTERNAL_SERVER_ERROR.message,

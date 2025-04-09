@@ -8,13 +8,12 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['teacher', 'student', 'piano_admin'],
+    enum: ['teacher', 'student', 'shop_admin','admin'],
     required: true
   },
   contactNumber: {
     type: String,
-    required: true,
-    unique: true
+    required: true
   },
   name: {
     type: String,
@@ -28,11 +27,20 @@ const userSchema = new mongoose.Schema({
     age: {
       type: Number,
       required: true
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
     }
   }],
   isVerified: {
     type: Boolean,
     default: false
+  },
+  accountStatus: {
+    type: String,
+    enum: ['pending', 'active', 'inactive'],
+    default: 'pending'
   },
   otp: {
     code: String,
@@ -50,8 +58,15 @@ const userSchema = new mongoose.Schema({
   resetFailCount: {
     type: Number,
     default: 0
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
   }
 });
+
+// Create compound index for contactNumber and role
+userSchema.index({ contactNumber: 1, role: 1 }, { unique: true });
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {

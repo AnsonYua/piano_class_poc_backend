@@ -4,6 +4,14 @@ module.exports = {
       code: 'MISSING_FIELDS',
       message: 'Contact number, password, and name are required'
     },
+    MISSING_USER_ID_OTP: {
+      code: 'MISSING_USER_ID_OTP',
+      message: 'User ID and OTP are required'
+    },
+    MISSING_USER_ID_OTP_PASSWORD: {
+      code: 'MISSING_USER_ID_OTP_PASSWORD',
+      message: 'User ID, OTP, and new password are required'
+    },
     INVALID_STUDENT_ARRAY: {
       code: 'INVALID_STUDENT_ARRAY',
       message: 'Student array must contain 1-10 objects'
@@ -71,5 +79,13 @@ module.exports = {
     OTP_TOO_RECENT: {
         code: 'OTP_TOO_RECENT',
         message: 'Please wait before requesting a new OTP'
+    },
+    INVALID_TOKEN: {
+        code: 'INVALID_TOKEN',
+        message: 'Invalid token'
+    },
+    TOKEN_EXPIRED: {
+        code: 'TOKEN_EXPIRED',
+        message: 'Token has expired'
     }
 };
