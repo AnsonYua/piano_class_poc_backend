@@ -458,9 +458,18 @@ async function handleLogin(req, res, userType) {
       await user.save();
     }
 
+    // Generate token with 7 days expiration
+    const tokenExpiresIn = '7d';
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
-      expiresIn: '7d'
+      expiresIn: tokenExpiresIn
     });
+
+    // Calculate expiration date
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days from now
+
+    // Save token in the database
+    await user.addToken(token, expiresAt);
 
     res.json({
       token,
@@ -691,28 +700,84 @@ router.post('/validate-token', async (req, res) => {
     }
 
     // Verify the token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (error) {
+      // Handle token verification errors
+      if (error.name === 'JsonWebTokenError') {
+        return res.status(401).json({
+          errorCode: ERROR_CODES.INVALID_TOKEN.code,
+          message: ERROR_CODES.INVALID_TOKEN.message
+        });
+      }
+      if (error.name === 'TokenExpiredError') {
+        return res.status(401).json({
+          errorCode: ERROR_CODES.TOKEN_EXPIRED.code,
+          message: ERROR_CODES.TOKEN_EXPIRED.message
+        });
+      }
+      throw error; // Re-throw other errors
+    }
     
-    // If verification is successful, return the user ID
-    res.json({ userId: decoded.userId });
-  } catch (error) {
-    // Handle token verification errors
-    if (error.name === 'JsonWebTokenError') {
+    // Find user by ID
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      return res.status(404).json({
+        errorCode: ERROR_CODES.USER_NOT_FOUND.code,
+        message: ERROR_CODES.USER_NOT_FOUND.message
+      });
+    }
+    
+    // Check if token is active in the database
+    if (!user.isTokenActive(token)) {
       return res.status(401).json({
         errorCode: ERROR_CODES.INVALID_TOKEN.code,
-        message: ERROR_CODES.INVALID_TOKEN.message
+        message: 'Token has been invalidated'
       });
     }
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        errorCode: ERROR_CODES.TOKEN_EXPIRED.code,
-        message: ERROR_CODES.TOKEN_EXPIRED.message
-      });
-    }
+    
+    // If verification is successful, return the user ID and role
+    res.json({ 
+      userId: decoded.userId,
+      role: user.role
+    });
+  } catch (error) {
+    // Handle token verification errors
     res.status(500).json({
       errorCode: ERROR_CODES.INTERNAL_SERVER_ERROR.code,
       message: ERROR_CODES.INTERNAL_SERVER_ERROR.message,
       error: error.message
+    });
+  }
+});
+
+// Logout route
+router.post('/logout', auth, async (req, res) => {
+  try {
+    const token = req.token;
+    const user = req.user;
+    
+    // Deactivate the token in the database
+    const deactivated = await user.deactivateToken(token);
+    
+    if (!deactivated) {
+      return res.status(400).json({
+        errorCode: ERROR_CODES.INTERNAL_SERVER_ERROR.code,
+        message: 'Token not found or already deactivated'
+      });
+    }
+    
+    res.status(200).json({ 
+      message: 'Logged out successfully',
+      userId: user._id
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ 
+      errorCode: ERROR_CODES.INTERNAL_SERVER_ERROR.code,
+      message: ERROR_CODES.INTERNAL_SERVER_ERROR.message,
+      error: error.message 
     });
   }
 });

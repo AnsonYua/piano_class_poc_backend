@@ -2,6 +2,7 @@
   "name": "piano-shop-backend",
   "version": "1.0.0",
   "description": "Backend API server for piano shop",
+  "license": "MIT",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",

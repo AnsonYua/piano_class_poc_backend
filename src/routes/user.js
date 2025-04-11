@@ -69,6 +69,14 @@ async function getUserProfile(req, res,type){
       });
     }
 
+    // Check if token is active in the database
+    if (!user.isTokenActive(token)) {
+      return res.status(401).json({
+        errorCode: ERROR_CODES.INVALID_TOKEN.code,
+        message: 'Token has been invalidated'
+      });
+    }
+
     // Check if the user is verified
     if (!user.isVerified) {
       return res.status(403).json({

@@ -59,6 +59,24 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  tokens: [{
+    token: {
+      type: String,
+      required: true
+    },
+    isActive: {
+      type: Boolean,
+      default: true
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    },
+    expiresAt: {
+      type: Date,
+      required: true
+    }
+  }],
   createdAt: {
     type: Date,
     default: Date.now
@@ -84,6 +102,30 @@ userSchema.pre('save', async function(next) {
 // Method to compare passwords
 userSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
+};
+
+// Method to add a token
+userSchema.methods.addToken = async function(token, expiresAt) {
+  this.tokens = this.tokens.concat({ token, expiresAt });
+  await this.save();
+  return this;
+};
+
+// Method to deactivate a token
+userSchema.methods.deactivateToken = async function(token) {
+  const tokenIndex = this.tokens.findIndex(t => t.token === token);
+  if (tokenIndex !== -1) {
+    this.tokens[tokenIndex].isActive = false;
+    await this.save();
+    return true;
+  }
+  return false;
+};
+
+// Method to check if a token is active
+userSchema.methods.isTokenActive = function(token) {
+  const tokenObj = this.tokens.find(t => t.token === token);
+  return tokenObj && tokenObj.isActive;
 };
 
 module.exports = mongoose.model('User', userSchema);

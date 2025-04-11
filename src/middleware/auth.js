@@ -16,6 +16,11 @@ const auth = async (req, res, next) => {
       return res.status(401).json({ message: 'User not found' });
     }
 
+    // Check if token is active in the database
+    if (!user.isTokenActive(token)) {
+      return res.status(401).json({ message: 'Token has been invalidated' });
+    }
+
     req.user = user;
     req.token = token;
     next();
