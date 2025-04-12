@@ -25,7 +25,24 @@ const pianoStudioSchema = new mongoose.Schema({
         default: Date.now
     }
 }, {
-    timestamps: true
+    timestamps: true,
+    toJSON: { 
+        virtuals: true,
+        transform: function(doc, ret) {
+            // Remove the virtual id field
+            delete ret.id;
+            return ret;
+        }
+    },
+    toObject: { virtuals: true }
+});
+
+// Virtual field for studio status entries
+pianoStudioSchema.virtual('statusEntries', {
+    ref: 'StudioStatus',
+    localField: '_id',
+    foreignField: 'studioId',
+    justOne: false
 });
 
 const PianoStudio = mongoose.model('PianoStudio', pianoStudioSchema);

@@ -35,7 +35,16 @@ const pianoRoomSchema = new mongoose.Schema({
         default: Date.now
     }
 }, {
-    timestamps: true
+    timestamps: true,
+    toJSON: { 
+        virtuals: true,
+        transform: function(doc, ret) {
+            // Remove the virtual id field
+            delete ret.id;
+            return ret;
+        }
+    },
+    toObject: { virtuals: true }
 });
 
 const PianoRoom = mongoose.model('PianoRoom', pianoRoomSchema);
