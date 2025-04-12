@@ -19,6 +19,10 @@ const pianoStudioSchema = new mongoose.Schema({
     description: {
         type: String,
         trim: true
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now
     }
 }, {
     timestamps: true

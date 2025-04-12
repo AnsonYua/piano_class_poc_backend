@@ -7,7 +7,7 @@ const pianoRoomService = {
         try {
             const pianoRooms = await PianoRoom.find({ adminId })
                 .populate('studios')
-                .sort({ createdAt: -1 });
+                .sort({ createdAt: 1 });
             return pianoRooms;
         } catch (error) {
             throw new Error('Error fetching piano rooms: ' + error.message);

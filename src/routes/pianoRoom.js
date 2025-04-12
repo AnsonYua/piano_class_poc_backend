@@ -67,8 +67,8 @@ router.post('/', verifyToken, async (req, res) => {
         const { name, district, address, roomCount } = req.body;
 
         // Validate roomCount
-        if (roomCount <= 1) {
-            return res.status(400).json({ message: 'roomCount must be greater than 1' });
+        if (roomCount < 1) {
+            return res.status(400).json({ message: 'roomCount must be greater than 0' });
         }
 
         // Create piano room data with the user ID from the token only

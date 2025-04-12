@@ -29,7 +29,11 @@ const pianoRoomSchema = new mongoose.Schema({
     studios: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'PianoStudio'
-    }]
+    }],
+    createdAt: {
+        type: Date,
+        default: Date.now
+    }
 }, {
     timestamps: true
 });
