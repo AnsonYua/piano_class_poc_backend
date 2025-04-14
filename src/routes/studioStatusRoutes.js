@@ -176,8 +176,8 @@ router.get('/room/:roomId', async (req, res) => {
         
         validateRequiredFields({ roomId }, ['roomId']);
 
-        const statusEntries = await studioStatusService.getStatusByRoom(roomId);
-        res.json({ statusEntries });
+        const result = await studioStatusService.getStatusByRoom(roomId);
+        res.json(result);
     } catch (error) {
         handleRouteError(res, error, 500);
     }
@@ -215,11 +215,23 @@ router.post('/batch-update', async (req, res) => {
             return res.status(400).json({ message: 'Please provide an array of updates' });
         }
 
-        const results = await Promise.all(
-            updates.map(update => processStatusUpdate(update, req.user._id))
-        );
+        // Validate all updates first
+        updates.forEach(update => {
+            validateRequiredFields(update, ['studioId', 'roomId', 'date', 'timeSlotSection', 'sectionDescription']);
+        });
 
-        res.status(200).json({ statuses: results });
+        // Use the new batch update method
+        const result = await studioStatusService.batchUpdateStatus(updates, req.user._id);
+        
+        res.status(200).json({ 
+            message: 'Batch update completed successfully',
+            result: {
+                modifiedCount: result.modifiedCount || 0,
+                upsertedCount: result.upsertedCount || 0,
+                skippedCount: result.skippedCount || { exact: 0, noChange: 0 },
+                totalProcessed: updates.length
+            }
+        });
     } catch (error) {
         handleRouteError(res, error);
     }

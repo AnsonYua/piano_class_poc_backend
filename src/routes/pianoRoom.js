@@ -87,4 +87,31 @@ router.post('/', verifyToken, async (req, res) => {
     }
 });
 
+// Check room availability
+router.post('/availability', verifyToken, async (req, res) => {
+    try {
+        const { district, section, date } = req.body;
+        
+        // Validate required fields
+        if (!district || !section || !date) {
+            return res.status(400).json({ 
+                message: 'Missing required fields: district, section, and date are required' 
+            });
+        }
+        
+        // Validate date format
+        const dateObj = new Date(date);
+        if (isNaN(dateObj.getTime())) {
+            return res.status(400).json({ message: 'Invalid date format' });
+        }
+        
+        // Check availability
+        const availableRooms = await pianoRoomService.checkRoomAvailability(district, section, date);
+        
+        res.json(availableRooms);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
 module.exports = router; 

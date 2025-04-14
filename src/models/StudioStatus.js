@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { formatToUTC8ISOString } = require('../utils/dateUtils');
 
 const studioStatusSchema = new mongoose.Schema({
     studioId: {
@@ -30,7 +31,7 @@ const studioStatusSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['pending', 'confirmed', 'cancelled', 'blocked'],
+        enum: ['requested','requestCanceled', 'confirmed',  'blocked','pending'],
         default: 'pending'
     },
     reason: {
@@ -52,6 +53,12 @@ const studioStatusSchema = new mongoose.Schema({
         transform: function(doc, ret) {
             // Remove the virtual id field
             delete ret.id;
+            
+            // Format dates to UTC+8
+            if (ret.date) ret.date = formatToUTC8ISOString(ret.date);
+            if (ret.createdAt) ret.createdAt = formatToUTC8ISOString(ret.createdAt);
+            if (ret.updatedAt) ret.updatedAt = formatToUTC8ISOString(ret.updatedAt);
+            
             return ret;
         }
     },

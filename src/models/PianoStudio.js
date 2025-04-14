@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { formatToUTC8ISOString } = require('../utils/dateUtils');
 
 const pianoStudioSchema = new mongoose.Schema({
     name: {
@@ -31,6 +32,11 @@ const pianoStudioSchema = new mongoose.Schema({
         transform: function(doc, ret) {
             // Remove the virtual id field
             delete ret.id;
+            
+            // Format dates to UTC+8
+            if (ret.createdAt) ret.createdAt = formatToUTC8ISOString(ret.createdAt);
+            if (ret.updatedAt) ret.updatedAt = formatToUTC8ISOString(ret.updatedAt);
+            
             return ret;
         }
     },

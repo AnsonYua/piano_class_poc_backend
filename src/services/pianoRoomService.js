@@ -1,6 +1,7 @@
 const PianoRoom = require('../models/PianoRoom');
 const PianoStudio = require('../models/PianoStudio');
 const StudioStatus = require('../models/StudioStatus');
+const { formatToUTC8ISOString } = require('../utils/dateUtils');
 
 const pianoRoomService = {
     // Get all piano rooms for an admin
@@ -103,7 +104,8 @@ const pianoRoomService = {
                 
                 if (studio.statusEntries && studio.statusEntries.length > 0) {
                     studio.statusEntries.forEach(status => {
-                        const dateStr = status.startTime.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+                        // Format date to UTC+8
+                        const dateStr = formatToUTC8ISOString(status.startTime).split('T')[0]; // Format: YYYY-MM-DD
                         
                         if (!statusByDate[dateStr]) {
                             statusByDate[dateStr] = {
@@ -113,8 +115,8 @@ const pianoRoomService = {
                         }
                         
                         statusByDate[dateStr].slots.push({
-                            startTime: status.startTime,
-                            endTime: status.endTime,
+                            startTime: formatToUTC8ISOString(status.startTime),
+                            endTime: formatToUTC8ISOString(status.endTime),
                             status: status.status,
                             statusId: status._id
                         });
@@ -163,6 +165,66 @@ const pianoRoomService = {
             return studioObj;
         } catch (error) {
             throw new Error('Error fetching studio: ' + error.message);
+        }
+    },
+
+    // Check room availability based on district, section, and date
+    async checkRoomAvailability(district, section, date) {
+        try {
+            // First, find all piano rooms in the specified district
+            const pianoRooms = await PianoRoom.find({ district });
+            
+            if (!pianoRooms || pianoRooms.length === 0) {
+                return []; // Case 2: No rooms found in the district
+            }
+            
+            // Get all studio IDs from these piano rooms
+            const studioIds = pianoRooms.flatMap(room => room.studios);
+            
+            // Check for section0 records for the given date
+            const section0Records = await StudioStatus.find({
+                studioId: { $in: studioIds },
+                date: new Date(date),
+                timeSlotSection: 'section0'
+            });
+            
+            // Check for records with the requested section for the given date
+            const sectionRecords = await StudioStatus.find({
+                studioId: { $in: studioIds },
+                date: new Date(date),
+                timeSlotSection: section
+            });
+            
+            // If there are no section0 records at all, return empty array (Case 3)
+            if (section0Records.length === 0) {
+                return [];
+            }
+            
+            // Process each piano room separately
+            const availableRooms = [];
+            
+            for (const room of pianoRooms) {
+                const roomStudioIds = room.studios.map(id => id.toString());
+                
+                // Check if this room has section0 records
+                const roomHasSection0 = section0Records.some(record => 
+                    roomStudioIds.includes(record.studioId.toString())
+                );
+                
+                // Check if this room has section records
+                const roomHasSection = sectionRecords.some(record => 
+                    roomStudioIds.includes(record.studioId.toString())
+                );
+                
+                // If room has section0 but no section records, it's available
+                if (roomHasSection0 && !roomHasSection) {
+                    availableRooms.push(room);
+                }
+            }
+            
+            return availableRooms;
+        } catch (error) {
+            throw new Error('Error checking room availability: ' + error.message);
         }
     }
 };
