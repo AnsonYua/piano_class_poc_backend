@@ -226,6 +226,107 @@ const pianoRoomService = {
         } catch (error) {
             throw new Error('Error checking room availability: ' + error.message);
         }
+    },
+
+    // Add the new method here
+    async checkRoomAvailabilitySlot(district, type, date) {
+        try {
+            // First, find all piano rooms in the specified district
+            const pianoRooms = await PianoRoom.find({ district });
+            
+            if (!pianoRooms || pianoRooms.length === 0) {
+                return {
+                    status: "success",
+                    data: {
+                        isDateAvailable: false,
+                        unAvailableSlots: []
+                    }
+                }
+            }
+            
+            // Get all studio IDs from these piano rooms
+            const studioIds = pianoRooms.flatMap(room => room.studios);
+            
+            // Check for section0 records for the given date
+            const section0Records = await StudioStatus.find({
+                studioId: { $in: studioIds },
+                date: new Date(date),
+                timeSlotSection: 'section0'
+            });
+            
+            // Check for records with the requested section for the given date
+            const sectionRecords = await StudioStatus.find({
+                studioId: { $in: studioIds },
+                date: new Date(date)
+            });
+            console.log(JSON.stringify(section0Records))
+            // If there are no section0 records at all, return empty array (Case 3)
+            if (section0Records.length === 0) {
+                return {
+                    status: "success",
+                    data: {
+                        isDateAvailable: false,
+                        unAvailableSlots: []
+                    }
+                }
+            }
+            
+
+           
+            // Process each piano room separately
+            let notAvailableSlots = [];
+            for (const _record of section0Records) {
+               
+                let filteredRecord = sectionRecords.filter(record => record.studioId.toString() === _record.studioId.toString());
+                 
+                filteredRecord.forEach(record => {
+                    notAvailableSlots.push(record.timeSlotSection);
+                })
+                
+               console.log("aa",_record.studioId , " ", filteredRecord)
+            }
+            let studioCount = section0Records.length;
+            console.log(studioCount)
+            console.log(notAvailableSlots)
+            const sectionCount = notAvailableSlots.reduce((acc, section) => {
+                acc[section] = (acc[section] || 0) + 1; // Count occurrences of each section
+                return acc;
+            }, {});
+
+            // Keep only sections that are duplicated 'studioCount' times
+            notAvailableSlots = Object.keys(sectionCount).filter(section => sectionCount[section] === studioCount);
+            if(notAvailableSlots.length>0){
+                if (notAvailableSlots.length == 1 && notAvailableSlots[0] == "section0"){
+                    return {
+                        status: "success",
+                        data: {
+                            isDateAvailable: true,
+                            unAvailableSlots: []
+                        }
+                    }
+                }else{
+                    notAvailableSlots.shift()
+                    return {
+                        status: "success",
+                        data: {
+                            isDateAvailable: true,
+                            unAvailableSlots: notAvailableSlots
+                        }
+                    }
+                }
+            }else{
+                return {
+                    status: "success",
+                    data: {
+                        isDateAvailable: false,
+                        unAvailableSlots: []
+                    }
+                }
+            }
+            return notAvailableSlots;
+        } catch (error) {
+            throw new Error('Error checking room availability: ' + error.message);
+        }
     }
 };
 
