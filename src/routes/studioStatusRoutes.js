@@ -142,10 +142,105 @@ router.patch('/:id/status', async (req, res) => {
 
 // Admin routes only shop_admin can access
 router.use(async (req, res, next) => {
-    if (req.user.role !== 'shop_admin') {
+    console.log(req.originalUrl);
+    if(req.originalUrl === '/api/studio-status/students/make-booking'||
+        req.originalUrl === '/api/studio-status/students/mybooking'
+        && req.user.role === 'student'
+    ) {
+        next();
+        return;
+    } else if (req.user.role !== 'shop_admin') {
         return res.status(403).json({ message: 'Access denied. Admin only.' });
     }
     next();
+});
+
+router.get('/students/mybooking', async (req, res) => {
+    try {
+        // req.user is set by verifyToken middleware
+        const userId = req.user._id;
+        // Get all studioStatus records for this user
+        const statusEntries = await studioStatusService.getMyStatusEntries(userId);
+        console.log(JSON.stringify(statusEntries));
+        // For each entry, populate PianoRoom and student info
+        // statusEntries already has roomId populated with 'name' field
+        // Let's also populate the full PianoRoom if needed
+        const pianoRoomMap = {};
+        const roomIds = [...new Set(statusEntries.map(e => e.roomId && e.roomId._id ? e.roomId._id.toString() : e.roomId))].filter(Boolean);
+        // Fetch all PianoRooms in one go
+        const pianoRooms = await PianoRoom.find({ _id: { $in: roomIds } });
+        pianoRooms.forEach(room => { pianoRoomMap[room._id.toString()] = room; });
+
+        // Get the student record for the user (if role is student)
+        let studentRecord = null;
+        if (req.user.role === 'student') {
+            // 'student' is an array field in User
+            studentRecord = req.user.student || [];
+        }
+
+        const bookings = statusEntries.map(entry => {
+            // Deep clone the pianoRoom object to avoid mutating shared Mongoose docs
+            let room = pianoRoomMap[entry.roomId && entry.roomId._id ? entry.roomId._id.toString() : entry.roomId];
+            room = room ? JSON.parse(JSON.stringify(room)) : null;
+            if (room) {
+                delete room.studios;
+                delete room.roomCount;
+                delete room.adminId;
+                delete room.createdAt;
+                delete room.updatedAt;
+            }
+            // Only return the student where _id === studentId
+            let filteredStudent = null;
+            if (Array.isArray(studentRecord) && entry.studentId) {
+                filteredStudent = studentRecord[entry.studentId]|| null;
+            }
+            // Remove unwanted fields from entry itself
+            const {
+                roomId, __v, id, ...cleanEntry
+            } = entry;
+            if (cleanEntry.studioId && cleanEntry.studioId._id) {
+                delete cleanEntry.studioId._id;
+            }
+            return {
+                ...cleanEntry,
+                pianoRoom: room,
+                student: filteredStudent
+            };
+        });
+        res.json({ bookings });
+    } catch (error) {
+        handleRouteError(res, error, 500);
+    }
+});
+
+router.post('/students/make-booking', async (req, res) => {
+    try {
+        const { updates } = req.body;
+        
+        if (!Array.isArray(updates) || updates.length === 0) {
+            return res.status(400).json({ message: 'Please provide an array of updates' });
+        }
+
+        // Validate all updates first
+        updates.forEach(update => {
+            validateRequiredFields(update, ['studioId', 'roomId', 'date', 'timeSlotSection', 'sectionDescription']);
+        });
+
+        // Use the new batch update method
+        const result = await studioStatusService.batchUpdateStatus(updates, req.user._id);
+        
+        res.status(200).json({ 
+            message: 'Batch update completed successfully',
+            result: {
+                modifiedCount: result.modifiedCount || 0,
+                upsertedCount: result.upsertedCount || 0,
+                skippedCount: result.skippedCount || { exact: 0, noChange: 0 },
+                totalProcessed: updates.length
+            }
+        });
+    } catch (error) {
+        handleRouteError(res, error);
+    }
 });
 
 router.post('/', async (req, res) => {

@@ -45,6 +45,14 @@ const studioStatusSchema = new mongoose.Schema({
     updatedAt: {
         type: Date,
         default: Date.now
+    },
+    remark: {
+        type: String,
+        required: false
+    },
+    studentId: {
+        type: String,
+        required: false
     }
 }, {
     timestamps: true,

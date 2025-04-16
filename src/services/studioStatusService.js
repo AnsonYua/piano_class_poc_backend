@@ -267,6 +267,7 @@ class StudioStatusService {
         for (const update of updates) {
             const { studioId, roomId, date, timeSlotSection, sectionDescription, status } = update;
             // Use UTC+8 formatted date for the key
+
             const key = `${studioId}-${roomId}-${formatToUTC8ISOString(new Date(date))}-${timeSlotSection}`;
             
             if (existingRecordsMap[key]) {
@@ -309,20 +310,41 @@ class StudioStatusService {
                     }
                 });
             } else {
-                // Create new record
-                bulkOps.push({
-                    insertOne: {
-                        document: {
-                            studioId,
-                            roomId,
-                            date: new Date(date),
-                            timeSlotSection,
-                            sectionDescription,
-                            userId,
-                            status: status || 'pending'
+                console.log(JSON.stringify(update));
+                if(update.remark) {
+                    console.log(update.remark);
+                    console.log(update.studentId);
+                    bulkOps.push({
+                        insertOne: {
+                            document: {
+                                studioId,
+                                roomId,
+                                date: new Date(date),
+                                timeSlotSection,
+                                sectionDescription,
+                                userId,
+                                status: status || 'pending',
+                                remark: update.remark,
+                                studentId: update.studentId
+                            }
                         }
-                    }
-                });
+                    });
+                }else{
+                    // Create new record
+                    bulkOps.push({
+                        insertOne: {
+                            document: {
+                                studioId,
+                                roomId,
+                                date: new Date(date),
+                                timeSlotSection,
+                                sectionDescription,
+                                userId,
+                                status: status || 'pending'
+                            }
+                        }
+                    });
+                }
             }
         }
 
