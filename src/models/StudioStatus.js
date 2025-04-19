@@ -57,6 +57,19 @@ const studioStatusSchema = new mongoose.Schema({
     studentId: {
         type: String,
         required: false
+    },
+    teacherId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: false
+    },
+    lessonComment: {
+        type: String,
+        required: false
+    },
+    options: {
+        type: [String],
+        required: false
     }
 }, {
     timestamps: true,

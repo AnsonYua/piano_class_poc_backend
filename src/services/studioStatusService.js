@@ -122,7 +122,7 @@ class StudioStatusService {
     
     // Get all status entries for a user
     async getMyStatusEntries(userId) {
-        const statusEntries = await StudioStatus.find({ userId })
+        const statusEntries = await StudioStatus.find({ userId }).sort({ createdAt: -1 })
             .populate('studioId', 'name')
             .populate('roomId', 'name')
             .sort({ date: 1, timeSlotSection: 1 });

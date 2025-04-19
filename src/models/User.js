@@ -28,6 +28,10 @@ const userSchema = new mongoose.Schema({
       type: Number,
       required: true
     },
+    grade: {
+      type: String,
+      required: false
+    },
     createdAt: {
       type: Date,
       default: Date.now
