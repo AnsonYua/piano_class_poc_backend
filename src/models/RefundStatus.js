@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const { formatToUTC8ISOString } = require('../utils/dateUtils');
 
-const studioStatusSchema = new mongoose.Schema({
+const refundStatusSchema = new mongoose.Schema({
     studioId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'PianoStudio',
@@ -25,14 +25,10 @@ const studioStatusSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    sectionDescription: {
-        type: String,
-        required: true
-    },
     status: {
         type: String,
-        enum: ['requested','requestCanceled', 'confirmed',  'blocked','pending'],
-        default: 'pending'
+        enum: ['refund'],
+        default: 'refund'
     },
     reason: {
         type: String,
@@ -63,33 +59,16 @@ const studioStatusSchema = new mongoose.Schema({
     toJSON: { 
         virtuals: true,
         transform: function(doc, ret) {
-            // Remove the virtual id field
             delete ret.id;
-            
-            // Format dates to UTC+8
             if (ret.date) ret.date = formatToUTC8ISOString(ret.date);
             if (ret.createdAt) ret.createdAt = formatToUTC8ISOString(ret.createdAt);
             if (ret.updatedAt) ret.updatedAt = formatToUTC8ISOString(ret.updatedAt);
-            
             return ret;
         }
     },
     toObject: { virtuals: true }
 });
 
-// Index for efficient querying
-studioStatusSchema.index({ studioId: 1, date: 1, timeSlotSection: 1 });
-studioStatusSchema.index({ roomId: 1, date: 1 });
-studioStatusSchema.index({ userId: 1, date: 1 });
+const RefundStatus = mongoose.model('RefundStatus', refundStatusSchema);
 
-// Pre-save middleware to validate time range
-studioStatusSchema.pre('save', function(next) {
-    if (this.date < new Date()) {
-        next(new Error('Date must be in the future'));
-    }
-    next();
-});
-
-const StudioStatus = mongoose.model('StudioStatus', studioStatusSchema);
-
-module.exports = StudioStatus; 
+module.exports = RefundStatus;

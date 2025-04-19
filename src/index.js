@@ -6,10 +6,15 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
 const pianoRoomRoutes = require('./routes/pianoRoom');
 const studioStatusRoutes = require('./routes/studioStatusRoutes');
+const hostAdminRoutes = require('./routes/hostAdminRoutes');
+const teacherAdminRoutes = require('./routes/teacherAdminRoutes');
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:3000',
+  credentials: true,
+}));
 app.use(express.json());
 
 // Connect to MongoDB
@@ -25,6 +30,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/piano-rooms', pianoRoomRoutes);
 app.use('/api/studio-status', studioStatusRoutes);
+app.use('/api/host-admin', hostAdminRoutes);
+app.use('/api/teacher-admin', teacherAdminRoutes);
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error(err.stack);
@@ -34,4 +41,4 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
-}); 
+});

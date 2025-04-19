@@ -144,7 +144,8 @@ router.patch('/:id/status', async (req, res) => {
 router.use(async (req, res, next) => {
     console.log(req.originalUrl);
     if(req.originalUrl === '/api/studio-status/students/make-booking'||
-        req.originalUrl === '/api/studio-status/students/mybooking'
+        req.originalUrl === '/api/studio-status/students/mybooking' ||
+        req.originalUrl === '/api/studio-status/students/cancel-booking'
         && req.user.role === 'student'
     ) {
         next();
@@ -240,6 +241,38 @@ router.post('/students/make-booking', async (req, res) => {
         });
     } catch (error) {
         handleRouteError(res, error);
+    }
+});
+
+router.post('/students/cancel-booking', async (req, res) => {
+    try {
+        const { bookingId } = req.body;
+        if (!bookingId) {
+            return res.status(400).json({ message: 'Missing bookingId' });
+        }
+        // Only allow students to cancel their own bookings
+        if (req.user.role !== 'student') {
+            return res.status(403).json({ message: 'Only students can cancel their own bookings' });
+        }
+        const StudioStatus = require('../models/StudioStatus');
+        // Find the booking with status 'pending'
+        const booking = await StudioStatus.findOne({
+            _id: bookingId,
+            status: 'requested'
+        });
+        if (!booking) {
+            return res.status(404).json({ message: 'Pending booking not found' });
+        }
+        // Ensure only the creator can cancel
+        if (booking.userId.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ message: 'You are not the creator of this booking' });
+        }
+        booking.status = 'requestCanceled';
+        booking.cancelReason = 'cancelFromStudent';
+        await booking.save();
+        res.status(200).json({ message: 'Booking cancelled successfully', booking });
+    } catch (error) {
+        handleRouteError(res, error, 500);
     }
 });
 

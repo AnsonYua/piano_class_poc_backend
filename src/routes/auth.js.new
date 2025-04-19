@@ -1,0 +1,35 @@
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
+const User = require('../models/User');
+const SignupAttempt = require('../models/SignupAttempt'); 
+const auth = require('../middleware/auth');
+const { sendOTPWhatsApp } = require('../services/whatsappService');
+const ERROR_CODES = require('./error');
+const router = express.Router();
+
+const OTP_EXPIRATION_TIME = 10 * 60 * 1000; // 10 minutes in milliseconds
+const VALID_USER_TYPES = ["student", "teacher", "shop_admin", "admin", "host_admin"];
+
+// Generate OTP
+const generateOTP = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// Validate user type
+const validateUserType = (userType) => {
+  if (!userType) {
+  if (!VALID_USER_TYPES.includes(userType)) {
+    return {
+      isValid: false,
+      error: {
+        errorCode: ERROR_CODES.INVALID_ROLE.code,
+        message: ERROR_CODES.INVALID_ROLE.message
+      }
+    };
+  }
+  return { isValid: true };
+};
+
+// Export the router
+module.exports = router;

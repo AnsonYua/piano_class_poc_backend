@@ -11,7 +11,7 @@ router.get('/getProfile', async (req, res) => {
 
 router.get('/:userType/getProfile', async (req, res) => {
   const userType = req.params.userType;
-  const validUserTypes = ["student", "teacher", "shop_admin", "admin"];
+  const validUserTypes = ["student", "teacher", "shop_admin", "host_admin"];
 
   if (validUserTypes.includes(userType)) {
     await getUserProfile(req, res, userType);

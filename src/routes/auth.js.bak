@@ -9,7 +9,7 @@ const ERROR_CODES = require('./error');
 const router = express.Router();
 
 const OTP_EXPIRATION_TIME = 10 * 60 * 1000; // 10 minutes in milliseconds
-const VALID_USER_TYPES = ["student", "teacher", "shop_admin",  "host_admin"];
+const VALID_USER_TYPES = ["student", "teacher", "shop_admin", "admin", "host_admin"];
 
 // Generate OTP
 const generateOTP = () => {
@@ -19,14 +19,6 @@ const generateOTP = () => {
 // Validate user type
 const validateUserType = (userType) => {
   if (!userType) {
-    return {
-      isValid: false,
-      error: {
-        errorCode: ERROR_CODES.INVALID_ROLE.code,
-        message: ERROR_CODES.INVALID_ROLE.message
-      }
-    };
-  }
   if (!VALID_USER_TYPES.includes(userType)) {
     return {
       isValid: false,
@@ -125,6 +117,10 @@ router.post('/signup', async (req, res) => {
 });
 
 router.post('/:userType/signup', async (req, res) => {
+  if(req.params.userType === 'host_admin') {
+    //convert url userType host_admin to admin
+    req.params.userType = 'admin';
+  }
   await handleSignup(req, res, req.params.userType);
 });
 
@@ -427,8 +423,6 @@ async function handleLogin(req, res, userType) {
       return res.status(400).json(fieldValidation.error);
     }
 
-    console.log('Contact number:', contactNumber);
-    console.log('userType:', userType);
     const user = await findUser({ contactNumber }, userType);
     if (!user) {
       return res.status(401).json({
